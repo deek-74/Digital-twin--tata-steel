@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Twin for Environmental Reporting</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/docx@7.3.0/build/index.js"></script>
+    <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .chart-container { position: relative; height: 40vh; width: 100%; }
+        .tab-button.active { border-bottom-color: #3b82f6; color: #3b82f6; font-weight: 600; }
+        .tab-button {
+            padding: 0.5rem 1rem;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">Digital Twin for enhancement of Environmental Reporting</h1>
+            <p class="text-lg text-gray-600 mt-2">An Advanced Platform for ESG Analysis and Q&A</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Control Panel -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg space-y-6">
+                <h2 class="text-2xl font-semibold mb-2 border-b pb-3">Control Panel</h2>
+                
+                <div>
+                    <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-1">Your Google Gemini API Key</label>
+                    <input type="password" id="apiKey" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Enter your API key here">
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">1. Upload Company Reports (min. 1)</label>
+                        <input type="file" id="companyFiles" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept=".pdf" multiple>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">2. Upload S&P Methodology PDF(s)</label>
+                        <input type="file" id="methodologyFiles" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" accept=".pdf" multiple>
+                    </div>
+                     <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">3. Upload DJSI Methodology PDF(s)</label>
+                        <input type="file" id="djsiFiles" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100" accept=".pdf" multiple>
+                    </div>
+                </div>
+
+                <button id="analyzeBtn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center text-lg">
+                    <i class="fas fa-cogs mr-2"></i> Generate Full Analysis
+                </button>
+
+                <div id="status" class="mt-4 text-center"></div>
+                 <!-- Downloads Section -->
+                <div id="downloadsSection" class="hidden pt-4 border-t">
+                    <h3 class="text-lg font-semibold mb-3 text-center">Download Reports</h3>
+                    <div class="flex flex-col space-y-3">
+                        <button id="downloadExcelBtn" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition duration-300 flex items-center justify-center">
+                            <i class="fas fa-file-excel mr-2"></i> Export Quantitative Data (.xlsx)
+                        </button>
+                        <button id="downloadWordBtn" class="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition duration-300 flex items-center justify-center">
+                            <i class="fas fa-file-word mr-2"></i> Export Qualitative Analysis (.docx)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results & Dashboard -->
+            <div id="outputContainer" class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg hidden">
+                <!-- Tab Navigation -->
+                <div class="border-b border-gray-200">
+                    <nav class="-mb-px flex space-x-6 overflow-x-auto" id="tabNav">
+                        <button class="tab-button active flex-shrink-0" data-tab="dashboard">Dashboard</button>
+                        <button class="tab-button flex-shrink-0" data-tab="sp-esg-score">S&P ESG Score</button>
+                        <button class="tab-button flex-shrink-0" data-tab="djsi-score">DJSI Score</button>
+                        <button class="tab-button flex-shrink-0" data-tab="qa">Q&A</button>
+                        <button class="tab-button flex-shrink-0" data-tab="metrics">Metric Discovery</button>
+                    </nav>
+                </div>
+                <!-- Tab Content -->
+                <div id="tabContent" class="mt-6">
+                    <div id="dashboard" class="tab-pane active">
+                        <div id="chartsGrid" class="grid grid-cols-1 xl:grid-cols-2 gap-8"></div>
+                    </div>
+                    <div id="sp-esg-score" class="tab-pane hidden">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="md:col-span-1 bg-blue-100 p-4 rounded-lg text-center">
+                                <h3 class="font-bold text-lg text-blue-800">S&P-Aligned Score</h3>
+                                <p id="esgScore" class="text-4xl font-bold text-blue-900 mt-2">--</p>
+                            </div>
+                            <div class="md:col-span-2 bg-green-100 p-4 rounded-lg">
+                                <h3 class="font-bold text-lg text-green-800">Scoring Feedback</h3>
+                                <div id="feedback" class="text-gray-700 mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                     <div id="djsi-score" class="tab-pane hidden">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                             <div class="md:col-span-1 bg-purple-100 p-4 rounded-lg text-center">
+                                <h3 class="font-bold text-lg text-purple-800">DJSI-Aligned Score</h3>
+                                <p id="djsiScore" class="text-4xl font-bold text-purple-900 mt-2">--</p>
+                            </div>
+                            <div class="md:col-span-2 bg-purple-50 p-4 rounded-lg">
+                                <h3 class="font-bold text-lg text-purple-800">Scoring Feedback</h3>
+                                <div id="djsiFeedback" class="text-gray-700 mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="qa" class="tab-pane hidden">
+                        <div class="space-y-4">
+                            <div>
+                                <label for="userQuery" class="block text-sm font-medium text-gray-700">Ask a question about the reports:</label>
+                                <div class="mt-1 flex rounded-md shadow-sm">
+                                    <input type="text" id="userQuery" class="flex-1 block w-full rounded-none rounded-l-md p-2 border-gray-300" placeholder="e.g., What was the total revenue in FY2024?">
+                                    <button id="askQueryBtn" class="inline-flex items-center px-4 py-2 border border-l-0 border-gray-300 bg-gray-50 text-gray-700 rounded-r-md hover:bg-gray-100">Ask</button>
+                                </div>
+                            </div>
+                            <div id="queryAnswer" class="p-4 bg-gray-50 rounded-lg min-h-[50px]"></div>
+                            <div>
+                                <h4 class="font-semibold">Suggested Questions:</h4>
+                                <div id="suggestedQuestions" class="mt-2 space-y-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="metrics" class="tab-pane hidden">
+                        <div id="discoveredMetrics" class="space-y-4"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
+
+        const fileInputs = {
+            apiKey: document.getElementById('apiKey'),
+            companyFiles: document.getElementById('companyFiles'),
+            methodologyFiles: document.getElementById('methodologyFiles'),
+            djsiFiles: document.getElementById('djsiFiles')
+        };
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const statusDiv = document.getElementById('status');
+        const outputContainer = document.getElementById('outputContainer');
+        const downloadsSection = document.getElementById('downloadsSection');
+        const tabNav = document.getElementById('tabNav');
+
+        // Output elements
+        let allData = {}; 
+        const chartsGrid = document.getElementById('chartsGrid');
+        const esgScoreEl = document.getElementById('esgScore');
+        const feedbackEl = document.getElementById('feedback');
+        const djsiScoreEl = document.getElementById('djsiScore');
+        const djsiFeedbackEl = document.getElementById('djsiFeedback');
+        const userQueryInput = document.getElementById('userQuery');
+        const askQueryBtn = document.getElementById('askQueryBtn');
+        const queryAnswerEl = document.getElementById('queryAnswer');
+        const suggestedQuestionsEl = document.getElementById('suggestedQuestions');
+        const discoveredMetricsEl = document.getElementById('discoveredMetrics');
+        const downloadExcelBtn = document.getElementById('downloadExcelBtn');
+        const downloadWordBtn = document.getElementById('downloadWordBtn');
+
+        let activeCharts = {};
+
+        tabNav.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
+                e.target.classList.add('active');
+                document.getElementById(e.target.dataset.tab).classList.remove('hidden');
+            }
+        });
+
+        analyzeBtn.addEventListener('click', async () => {
+            const apiKey = fileInputs.apiKey.value.trim();
+            const companyFiles = fileInputs.companyFiles.files;
+            const methodologyFiles = fileInputs.methodologyFiles.files;
+            const djsiFiles = fileInputs.djsiFiles.files;
+
+            if (!apiKey || companyFiles.length === 0 || methodologyFiles.length === 0 || djsiFiles.length === 0) {
+                showStatus('Please provide API key and upload all required documents.', 'error');
+                return;
+            }
+
+            resetUI();
+            
+            try {
+                showStatus('Reading and consolidating reports...', 'loading');
+                const companyTextPromises = Array.from(companyFiles).map(file => extractTextFromPdf(file));
+                const methodologyTextPromises = Array.from(methodologyFiles).map(file => extractTextFromPdf(file));
+                const djsiTextPromises = Array.from(djsiFiles).map(file => extractTextFromPdf(file));
+                
+                const [companyTexts, methodologyTexts, djsiTexts] = await Promise.all([
+                    Promise.all(companyTextPromises),
+                    Promise.all(methodologyTextPromises),
+                    Promise.all(djsiTextPromises)
+                ]);
+                
+                const combinedCompanyText = companyTexts.join('\n\n---\n\n');
+                const combinedMethodologyText = methodologyTexts.join('\n\n---\n\n');
+                const combinedDjsiText = djsiTexts.join('\n\n---\n\n');
+
+                showStatus('Performing comprehensive AI analysis...', 'loading');
+                
+                const [
+                    discoveredMetrics,
+                    spEsgScore,
+                    djsiScore,
+                    suggestedQuestions,
+                    dashboardData
+                ] = await Promise.all([
+                    discoverMetrics(apiKey, combinedCompanyText),
+                    getSpScore(apiKey, combinedCompanyText, combinedMethodologyText),
+                    getDjsiScore(apiKey, combinedCompanyText, combinedDjsiText),
+                    getSuggestedQuestions(apiKey, combinedCompanyText),
+                    extractDashboardData(apiKey, combinedCompanyText)
+                ]);
+
+                allData = { 
+                    discoveredMetrics, 
+                    spEsgScore, 
+                    djsiScore, 
+                    suggestedQuestions, 
+                    dashboardData, 
+                    rawText: combinedCompanyText 
+                };
+
+                showStatus('Analysis Complete!', 'success');
+                displayAllResults();
+            } catch (error) {
+                console.error('Analysis failed:', error);
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        });
+        
+        async function callGemini(apiKey, prompt, isJson = false) {
+            const model = 'gemini-1.5-flash-latest';
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ parts: [{ text: prompt }] }] };
+            if (isJson) payload.generationConfig = { responseMimeType: "application/json" };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                 const errorBody = await response.text();
+                 console.error("API Error Body:", errorBody);
+                 throw new Error(`API call failed: ${response.status}. Please check your API key and network connection.`);
+            }
+            const result = await response.json();
+            if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                return result.candidates[0].content.parts[0].text;
+            }
+            // Handle cases where the API returns a response without the expected text part.
+            if (result.promptFeedback && result.promptFeedback.blockReason) {
+                throw new Error(`API call blocked. Reason: ${result.promptFeedback.blockReason}`);
+            }
+            throw new Error('Invalid response from Gemini API.');
+        }
+
+        function safeJsonParse(jsonString) {
+            try {
+                const match = jsonString.match(/\{[\s\S]*\}/);
+                if (match && match[0]) return JSON.parse(match[0]);
+                throw new Error("No valid JSON object found.");
+            } catch (e) {
+                console.error("JSON Parse Error:", e, "String:", jsonString);
+                throw new Error("The AI returned a malformed JSON response. Please try again.");
+            }
+        }
+
+        async function discoverMetrics(apiKey, companyText) {
+            const prompt = `Scan the corporate reports and list all key quantitative metrics found, categorized under "Environmental", "Social", and "Health & Safety". For each, provide its name and the most recent value. Return a single JSON object.
+            **Corporate Reports:** """${companyText.substring(0, 150000)}"""`;
+            const jsonString = await callGemini(apiKey, prompt, true);
+            return safeJsonParse(jsonString);
+        }
+
+        async function getSpScore(apiKey, companyText, methodologyText) {
+            const prompt = `As an S&P ESG analyst, use the S&P methodologies provided to give a "score" (number out of 100) and "feedback" (a concise, bulleted string) based on the corporate reports. Return a single JSON object.
+            **S&P Methodologies:** """${methodologyText.substring(0, 75000)}"""
+            **Corporate Reports:** """${companyText.substring(0, 75000)}"""`;
+            const jsonString = await callGemini(apiKey, prompt, true);
+            return safeJsonParse(jsonString);
+        }
+
+        async function getDjsiScore(apiKey, companyText, djsiText) {
+            const prompt = `As a DJSI analyst, use the DJSI methodology to give a "score" (number out of 100) and "feedback" (bulleted string) based on the corporate reports. Return a single JSON object.
+            **DJSI Methodologies:** """${djsiText.substring(0, 75000)}"""
+            **Corporate Reports:** """${companyText.substring(0, 75000)}"""`;
+            const jsonString = await callGemini(apiKey, prompt, true);
+            return safeJsonParse(jsonString);
+        }
+
+        async function getSuggestedQuestions(apiKey, companyText) {
+            const prompt = `Generate an array of 5 insightful string questions a stakeholder might ask based on the provided corporate reports. Return a single JSON object with a key "questions".
+            **Corporate Reports:** """${companyText.substring(0, 100000)}"""`;
+            const jsonString = await callGemini(apiKey, prompt, true);
+            const result = safeJsonParse(jsonString);
+            return result.questions || [];
+        }
+
+        async function extractDashboardData(apiKey, combinedText) {
+             const prompt = `
+             Extract time-series data for these 4 metrics from the text. Return a single JSON object.
+             - "ghgEmissions": { "years": [], "values": [] } (Scope 1 + 2, in Million tCO2e)
+             - "waterUsed": { "years": [], "values": [] } (Fresh water consumption, in Million m³)
+             - "wastewaterReleased": { "years": [], "values": [] } (Effluent discharge volume, in Million m³)
+             - "safetyIncidents": { "years": [], "values": [] } (Sum of fatalities and high-consequence injuries)
+             
+             Text: """${combinedText.substring(0, 150000)}"""
+             `;
+            const jsonString = await callGemini(apiKey, prompt, true);
+            return safeJsonParse(jsonString);
+        }
+
+        async function answerUserQuery(apiKey, combinedText, question, suggestedQuestions) {
+            const prompt = `Answer the user's question based *only* on the provided text. If the answer is not in the text, check if the query is semantically similar to any of the suggested questions. If it is, answer the most relevant suggested question and mention that you are doing so. Otherwise, state that the information is not available in the provided documents.
+            **Suggested Questions:**
+            ${suggestedQuestions.join('\n')}
+
+            **User Question:** "${question}"
+            **Report Text:** """${combinedText}"""`;
+            return callGemini(apiKey, prompt);
+        }
+        
+        function displayAllResults() {
+            // S&P ESG Score
+            esgScoreEl.textContent = allData.spEsgScore.score;
+            feedbackEl.innerHTML = formatToHtmlList(allData.spEsgScore.feedback);
+
+            // DJSI Score
+            djsiScoreEl.textContent = allData.djsiScore.score;
+            djsiFeedbackEl.innerHTML = formatToHtmlList(allData.djsiScore.feedback);
+
+            // Q&A
+            suggestedQuestionsEl.innerHTML = allData.suggestedQuestions.map(q => 
+                `<button class="text-left text-blue-600 hover:underline text-sm">${q}</button>`
+            ).join('');
+            
+            // Metric Discovery
+            discoveredMetricsEl.innerHTML = '';
+            for (const category in allData.discoveredMetrics) {
+                let html = `<h3 class="font-bold text-lg mt-4">${category}</h3><ul class="list-disc list-inside space-y-1 mt-2">`;
+                const metrics = allData.discoveredMetrics[category];
+                if (Array.isArray(metrics)) {
+                    html += metrics.map(m => `<li><strong>${m.name}:</strong> ${m.value}</li>`).join('');
+                } else if (typeof metrics === 'object' && metrics !== null) {
+                    html += Object.entries(metrics).map(([name, value]) => `<li><strong>${name}:</strong> ${value}</li>`).join('');
+                }
+                html += `</ul>`;
+                discoveredMetricsEl.innerHTML += html;
+            }
+
+            renderFullDashboard();
+            
+            outputContainer.classList.remove('hidden');
+            downloadsSection.classList.remove('hidden');
+        }
+
+        function renderFullDashboard() {
+            chartsGrid.innerHTML = '';
+            const data = allData.dashboardData;
+            
+            const createChart = (id, type, title, labels, datasets, yLabel) => {
+                if (!labels || labels.length === 0) return;
+                const container = document.createElement('div');
+                container.className = 'chart-container bg-gray-50 p-4 rounded-lg border';
+                const canvas = document.createElement('canvas');
+                container.appendChild(canvas);
+                chartsGrid.appendChild(container);
+                
+                if (activeCharts[id]) activeCharts[id].destroy();
+                activeCharts[id] = new Chart(canvas.getContext('2d'), {
+                    type,
+                    data: { labels, datasets },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { title: { display: true, text: title, font: {size: 16} } },
+                        scales: { y: { title: { display: true, text: yLabel } }, x: { title: { display: true, text: 'Fiscal Year' } } }
+                    }
+                });
+            };
+
+            if (data.ghgEmissions) createChart('ghgChart', 'bar', 'GHG Emissions (Scope 1+2)', data.ghgEmissions.years,
+                [{ label: 'Emissions', data: data.ghgEmissions.values, backgroundColor: 'rgba(255, 99, 132, 0.7)' }], 'Million tCO2e');
+
+            if (data.waterUsed) createChart('waterChart', 'bar', 'Fresh Water Used', data.waterUsed.years,
+                [{ label: 'Usage', data: data.waterUsed.values, backgroundColor: 'rgba(54, 162, 235, 0.7)' }], 'Million m³');
+
+            if (data.wastewaterReleased) createChart('wastewaterChart', 'bar', 'Wastewater Released', data.wastewaterReleased.years,
+                [{ label: 'Discharge', data: data.wastewaterReleased.values, backgroundColor: 'rgba(75, 192, 192, 0.7)' }], 'Million m³');
+
+            if (data.safetyIncidents) createChart('safetyChart', 'bar', 'Total Safety Incidents', data.safetyIncidents.years,
+                [{ label: 'Incidents', data: data.safetyIncidents.values, backgroundColor: 'rgba(255, 159, 64, 0.7)' }], 'Number of Incidents');
+        }
+
+        askQueryBtn.addEventListener('click', handleQuery);
+        suggestedQuestionsEl.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                userQueryInput.value = e.target.textContent;
+                handleQuery();
+            }
+        });
+
+        async function handleQuery() {
+            const question = userQueryInput.value;
+            if (!question) return;
+            queryAnswerEl.innerHTML = 'Thinking...';
+            const answer = await answerUserQuery(fileInputs.apiKey.value, allData.rawText, question, allData.suggestedQuestions);
+            queryAnswerEl.innerHTML = formatToHtmlList(answer);
+        }
+
+        function formatToHtmlList(text) {
+             if (Array.isArray(text)) {
+                text = text.join('\n');
+            }
+            if (typeof text !== 'string' || !text) {
+                return '';
+            }
+            return '<ul>' + text.split('\n').filter(Boolean).map(line => {
+                if (line.trim().startsWith('* ') || line.trim().startsWith('- ')) {
+                    return `<li class="ml-4 list-disc">${line.trim().substring(2)}</li>`;
+                }
+                return `<li>${line}</li>`;
+            }).join('') + '</ul>';
+        }
+
+        async function extractTextFromPdf(file) {
+            if (!file) return "";
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            let allText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                allText += textContent.items.map(item => item.str).join(' ');
+            }
+            return allText;
+        }
+
+        function resetUI() {
+            outputContainer.classList.add('hidden');
+            downloadsSection.classList.add('hidden');
+            Object.values(activeCharts).forEach(chart => chart.destroy());
+            activeCharts = {};
+            allData = {};
+        }
+
+        function showStatus(message, type = 'info') {
+            statusDiv.innerHTML = '';
+            const p = document.createElement('p');
+            p.textContent = message;
+            if (type === 'loading') {
+                const loader = document.createElement('div');
+                loader.className = 'loader mx-auto my-2';
+                statusDiv.appendChild(loader);
+                p.className = 'text-blue-600';
+            } else if (type === 'success') {
+                p.className = 'text-green-600 font-semibold';
+            } else if (type === 'error') {
+                p.className = 'text-red-600 font-semibold';
+            }
+            statusDiv.appendChild(p);
+        }
+
+        downloadExcelBtn.addEventListener('click', () => {
+            const wb = XLSX.utils.book_new();
+            const metricsData = [];
+            for (const category in allData.discoveredMetrics) {
+                const metrics = allData.discoveredMetrics[category];
+                 if (Array.isArray(metrics)) {
+                    metrics.forEach(m => {
+                        metricsData.push({ Category: category, Metric: m.name, Value: m.value });
+                    });
+                } else if (typeof metrics === 'object' && metrics !== null) {
+                    Object.entries(metrics).forEach(([name, value]) => {
+                         metricsData.push({ Category: category, Metric: name, Value: value });
+                    });
+                }
+            }
+            const metricsWs = XLSX.utils.json_to_sheet(metricsData);
+            XLSX.utils.book_append_sheet(wb, metricsWs, "Discovered Metrics");
+
+            const dashboardSheetData = [];
+            for (const key in allData.dashboardData) {
+                const metric = allData.dashboardData[key];
+                if(metric && metric.years) {
+                    for(let i = 0; i < metric.years.length; i++) {
+                        dashboardSheetData.push({ Metric: key, Year: metric.years[i], Value: metric.values[i] });
+                    }
+                }
+            }
+            const dashboardWs = XLSX.utils.json_to_sheet(dashboardSheetData);
+            XLSX.utils.book_append_sheet(wb, dashboardWs, "Dashboard Data");
+            
+            XLSX.writeFile(wb, 'Quantitative_ESG_Data.xlsx');
+        });
+
+        downloadWordBtn.addEventListener('click', () => {
+            const { Paragraph, TextRun, HeadingLevel, Document, Packer } = docx;
+            const docChildren = [];
+
+            // S&P Score
+            docChildren.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("S&P ESG Score")] }));
+            docChildren.push(new Paragraph({ children: [new TextRun({ text: `Score: ${allData.spEsgScore.score}/100`, bold: true })] }));
+            (allData.spEsgScore.feedback || '').split('\n').forEach(line => {
+                if(line.trim().length > 0) {
+                    docChildren.push(new Paragraph({ children: [new TextRun(line.replace(/^- /, ''))], bullet: { level: 0 } }));
+                }
+            });
+
+            // DJSI Score
+            docChildren.push(new Paragraph({ text: '' }));
+            docChildren.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("DJSI Score")] }));
+            docChildren.push(new Paragraph({ children: [new TextRun({ text: `Score: ${allData.djsiScore.score}/100`, bold: true })] }));
+            (allData.djsiScore.feedback || '').split('\n').forEach(line => {
+                if(line.trim().length > 0) {
+                    docChildren.push(new Paragraph({ children: [new TextRun(line.replace(/^- /, ''))], bullet: { level: 0 } }));
+                }
+            });
+            
+            const doc = new Document({ sections: [{ children: docChildren }] });
+
+            Packer.toBlob(doc).then(blob => {
+                saveAs(blob, "Qualitative_ESG_Analysis.docx");
+            });
+        });
+    </script>
+</body>
+</html>
+
